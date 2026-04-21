@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>casangelsChat</title>
+  <script src="https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.1.0-beta.0/libs/cn/index.js"></script>
+  <style>
+    * {
+      box-sizing: border-box !important;
+    }
+    html, body { 
+      margin: 0 !important; 
+      padding: 0 !important; 
+      width: 100% !important;
+      height: 100% !important;
+      overflow-x: hidden !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif !important; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+    #coze-app { 
+      width: 100vw !important; 
+      height: 100vh !important;
+      overflow: hidden !important;
+    }
+    #loading {
+      position: fixed !important; 
+      top: 50% !important; 
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      text-align: center !important;
+      font-size: 18px !important;
+      color: white !important;
+      background: rgba(0, 0, 0, 0.7) !important;
+      padding: 30px !important;
+      border-radius: 10px !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+      z-index: 9999 !important;
+    }
+    
+    /* 隐藏Coze品牌标识 */
+    [class*="powered"],
+    [class*="Powered"],
+    [class*="brand"],
+    [class*="Brand"] {
+      display: none !important;
+    }
+    
+    /* 强制让所有元素支持滚动和完整显示 */
+    * {
+      overflow: visible !important;
+      overflow-x: visible !important;
+      overflow-y: visible !important;
+      max-width: none !important;
+      max-height: none !important;
+      text-overflow: clip !important;
+      white-space: normal !important;
+      word-wrap: break-word !important;
+    }
+    
+    /* 表格特殊处理 */
+    table, thead, tbody, tr, td, th {
+      display: block !important;
+      overflow-x: auto !important;
+      white-space: nowrap !important;
+      font-size: 11px !important;
+    }
+    
+    /* 卡片和弹窗 */
+    [class*="card"], [class*="Card"], [class*="modal"], [class*="Modal"], [class*="popup"], [class*="Popup"] {
+      max-width: 100vw !important;
+      overflow: auto !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Initializing...</div>
+  <div id="coze-app"></div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const BOT_ID = '7629614492277276723';
+    let cozeClient = null;
+
+    async function initCozeSDK() {
+      try {
+        const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        console.log('User ID:', userId);
+
+        const response = await fetch(`${API_BASE}/api/coze/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Token failed');
+        }
+
+        const data = await response.json();
+        const accessToken = data.access_token;
+        console.log('Token success');
+
+        document.getElementById('loading').style.display = 'none';
+
+        cozeClient = new CozeWebSDK.WebChatClient({
+          config: { 
+            bot_id: BOT_ID,
+            isIframe: false
+          },
+          auth: {
+            type: 'token',
+            token: accessToken,
+            onRefreshToken: async () => {
+              console.log('Refreshing token...');
+              const res = await fetch(`${API_BASE}/api/coze/refresh-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId })
+              });
+              const newData = await res.json();
+              return newData.access_token;
+            }
+          },
+          userInfo: {
+            id: userId,
+            nickname: `User${userId.substr(-6)}`,
+            url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`
+          },
+          ui: {
+            base: {
+              layout: 'mobile',
+              zIndex: 9999
+            },
+            asstBtn: {
+              isNeed: false
+            },
+            chatBot: {
+              windowWidth: '100vw',
+              windowHeight: '100vh',
+              position: 'center',
+              showCloseButton: false,
+              allowUploadFile: true,
+              allowVoiceInput: true,
+              allowFeedback: false,
+              allowCreateConversation: false
+            },
+            conversations: {
+              isNeed: false
+            },
+            footer: {
+              isShow: false
+            },
+            header: {
+              isShow: false
+            }
+          }
+        });
+
+        console.log('SDK init complete');
+        showFullscreenChat();
+
+      } catch (error) {
+        console.error('Init failed:', error);
+        document.getElementById('loading').innerHTML = `
+          <div style="padding:20px;text-align:center;background:#ffebee;border-radius:8px;">
+            <h3>Init Failed</h3>
+            <p><strong>Error:</strong> ${error.message}</p>
+            <button onclick="location.reload()" style="
+              background: #667eea;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin-top: 15px;
+            ">Reload</button>
+          </div>`;
+      }
+    }
+
+    // 强力修复所有溢出问题
+    function forceFixOverflow() {
+      try {
+        // 遍历所有元素
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach(el => {
+          // 强制移除所有 overflow 限制
+          el.style.setProperty('overflow', 'visible', 'important');
+          el.style.setProperty('overflow-x', 'visible', 'important');
+          el.style.setProperty('overflow-y', 'visible', 'important');
+          el.style.setProperty('max-width', 'none', 'important');
+          el.style.setProperty('max-height', 'none', 'important');
+          el.style.setProperty('text-overflow', 'clip', 'important');
+          el.style.setProperty('white-space', 'normal', 'important');
+          
+          // 表格特殊处理
+          const tag = el.tagName?.toLowerCase();
+          if (tag === 'table' || tag === 'thead' || tag === 'tbody' || tag === 'tr' || tag === 'td' || tag === 'th') {
+            el.style.setProperty('display', 'block', 'important');
+            el.style.setProperty('overflow-x', 'auto', 'important');
+            el.style.setProperty('white-space', 'nowrap', 'important');
+            el.style.setProperty('font-size', '11px', 'important');
+          }
+        });
+        
+        // 遍历所有 iframe
+        document.querySelectorAll('iframe').forEach(iframe => {
+          try {
+            iframe.style.setProperty('max-width', '100vw', 'important');
+            iframe.style.setProperty('overflow', 'hidden', 'important');
+            
+            // 尝试修改 iframe 内部
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (iframeDoc) {
+              const style = iframeDoc.createElement('style');
+              style.textContent = `
+                * { 
+                  overflow: visible !important; 
+                  overflow-x: visible !important;
+                  max-width: none !important;
+                  text-overflow: clip !important;
+                  white-space: normal !important;
+                }
+                table, td, th { 
+                  display: block !important;
+                  overflow-x: auto !important;
+                  white-space: nowrap !important;
+                  font-size: 11px !important;
+                }
+              `;
+              iframeDoc.head.appendChild(style);
+            }
+          } catch (e) {}
+        });
+        
+        // 遍历所有 shadow DOM
+        document.querySelectorAll('*').forEach(el => {
+          if (el.shadowRoot) {
+            try {
+              const style = el.shadowRoot.querySelector('style') || el.shadowRoot.appendChild(document.createElement('style'));
+              style.textContent += `
+                * { 
+                  overflow: visible !important; 
+                  overflow-x: visible !important;
+                  max-width: none !important;
+                  text-overflow: clip !important;
+                  white-space: normal !important;
+                }
+              `;
+            } catch (e) {}
+          }
+        });
+      } catch (e) {
+        console.log('Fix error:', e);
+      }
+    }
+
+    function showFullscreenChat() {
+      setTimeout(() => {
+        if (cozeClient && typeof cozeClient.showChatBot === 'function') {
+          cozeClient.showChatBot();
+        }
+        
+        // 多次执行修复，确保生效
+        setTimeout(forceFixOverflow, 500);
+        setTimeout(forceFixOverflow, 1000);
+        setTimeout(forceFixOverflow, 2000);
+        setTimeout(forceFixOverflow, 3000);
+        setTimeout(forceFixOverflow, 5000);
+        
+        // 设置 MutationObserver 监听 DOM 变化
+        setTimeout(() => {
+          const observer = new MutationObserver((mutations) => {
+            forceFixOverflow();
+          });
+          
+          const target = document.querySelector('#coze-app') || document.body;
+          observer.observe(target, { 
+            childList: true, 
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+          });
+          
+          console.log('Observer started');
+        }, 1000);
+      }, 500);
+    }
+
+    window.addEventListener('load', initCozeSDK);
+  </script>
+</body>
+</html>
